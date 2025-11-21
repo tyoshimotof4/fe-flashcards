@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>基本情報 2択フラッシュカード</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+    }
+    #app {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .card {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 18px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0 0 4px;
+    }
+    h2 {
+      font-size: 18px;
+      margin: 0 0 12px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      margin: 8px 0;
+      font-size: 17px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+    .btn-primary {
+      background: #1976d2;
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #eeeeee;
+      color: #333;
+    }
+    .btn-a {
+      background: #43a047;
+      color: #fff;
+    }
+    .btn-b {
+      background: #e53935;
+      color: #fff;
+    }
+    .btn-next {
+      background: #0288d1;
+      color: #fff;
+    }
+    .btn-small {
+      padding: 10px;
+      font-size: 14px;
+      width: auto;
+      display: inline-block;
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e3f2fd;
+      color: #1565c0;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .question-text {
+      font-size: 18px;
+      margin: 10px 0 12px;
+      line-height: 1.5;
+      text-align: left;
+    }
+    .result {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 10px;
+      min-height: 1.5em;
+    }
+    .explanation {
+      font-size: 13px;
+      color: #555;
+      margin-top: 6px;
+      text-align: left;
+    }
+    .hidden {
+      display: none;
+    }
+    .genre-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .genre-btn {
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 999px;
+      border: none;
+      background: #eeeeee;
+      cursor: pointer;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #555;
+    }
+    .score {
+      font-size: 13px;
+      color: #444;
+      margin-bottom: 6px;
+      text-align: right;
+      min-height: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- トップメニュー -->
+    <div id="screen-menu" class="card">
+      <h1>基本情報 2択フラッシュカード</h1>
+      <p class="subtitle">片手タップでサクサク解ける学習アプリ（問題データ：questions.json）</p>
+      <button class="btn btn-primary" onclick="selectMode('random')">ランダム出題（全ジャンル）</button>
+      <button class="btn btn-secondary" onclick="selectMode('genre')">ジャンル別に解く</button>
+      <p id="loadStatus" class="subtitle"></p>
+    </div>
+
+    <!-- ジャンル選択画面 -->
+    <div id="screen-genre" class="card hidden">
+      <h2>ジャンルを選択</h2>
+      <p class="subtitle">解きたい分野をタップしてください</p>
+      <div id="genreButtons" class="genre-grid"></div>
+      <button class="btn btn-small" onclick="backToMenu()">← メニューへ戻る</button>
+    </div>
+
+    <!-- クイズ画面 -->
+    <div id="screen-quiz" class="card hidden">
+      <div class="topbar">
+        <span id="quizModeLabel"></span>
+        <span id="progress"></span>
+      </div>
+      <div id="score" class="score"></div>
+      <div class="tag" id="genreTag"></div>
+      <p class="question-text" id="question"></p>
+      <button class="btn btn-a" onclick="answer('A')">A：正しい</button>
+      <button class="btn btn-b" onclick="answer('B')">B：誤り</button>
+      <div id="result" class="result"></div>
+      <div id="explanation" class="explanation"></div>
+      <button id="nextBtn" class="btn btn-next hidden" onclick="nextQuestion()">次の問題へ ▶</button>
+      <button class="btn btn-small" onclick="backToMenu()">← メニュー</button>
+    </div>
+  </div>
+
+  <script>
+    // --- 外部JSONから読み込む問題データ ---
+    let questions = [];
+    let questionsLoaded = false;
+
+    const loadStatusEl = document.getElementById('loadStatus');
+
+    fetch('questions.json')
+      .then(res => res.json())
+      .then(data => {
+        questions = data;
+        questionsLoaded = true;
+        loadStatusEl.textContent = '問題数：' + questions.length + '問 読み込み済み';
+      })
+      .catch(err => {
+        console.error(err);
+        loadStatusEl.textContent = '※ questions.json が読み込めませんでした。HTMLと同じフォルダに置き、できれば簡易Webサーバー経由で開いてください。';
+      });
+
+    let mode = null;              // 'random' or 'genre'
+    let currentGenre = null;      // 選択中ジャンル（genreモード時）
+    let order = [];               // 出題順インデックス配列
+    let index = 0;                // 今の出題位置
+    let correctCount = 0;         // 正解数
+    let answerCount  = 0;         // 回答数
+
+    const screenMenu  = document.getElementById('screen-menu');
+    const screenGenre = document.getElementById('screen-genre');
+    const screenQuiz  = document.getElementById('screen-quiz');
+    const genreTag    = document.getElementById('genreTag');
+    const questionEl  = document.getElementById('question');
+    const resultEl    = document.getElementById('result');
+    const explanationEl = document.getElementById('explanation');
+    const nextBtn     = document.getElementById('nextBtn');
+    const quizModeLabel = document.getElementById('quizModeLabel');
+    const progressEl  = document.getElementById('progress');
+    const scoreEl     = document.getElementById('score');
+
+    function showScreen(target) {
+      screenMenu.classList.add('hidden');
+      screenGenre.classList.add('hidden');
+      screenQuiz.classList.add('hidden');
+      if (target === 'menu') screenMenu.classList.remove('hidden');
+      if (target === 'genre') screenGenre.classList.remove('hidden');
+      if (target === 'quiz') screenQuiz.classList.remove('hidden');
+    }
+
+    function resetScore() {
+      correctCount = 0;
+      answerCount  = 0;
+      updateScore();
+    }
+
+    function backToMenu() {
+      mode = null;
+      currentGenre = null;
+      showScreen('menu');
+    }
+
+    function ensureLoaded() {
+      if (!questionsLoaded || questions.length === 0) {
+        alert('問題データがまだ読み込まれていません。\nquestions.json を確認して、数秒後にもう一度お試しください。');
+        return false;
+      }
+      return true;
+    }
+
+    function selectMode(m) {
+      if (!ensureLoaded()) return;
+      mode = m;
+      resetScore();
+      if (mode === 'random') {
+        startRandomMode();
+      } else if (mode === 'genre') {
+        buildGenreButtons();
+        showScreen('genre');
+      }
+    }
+
+    function buildGenreButtons() {
+      const genreButtons = document.getElementById('genreButtons');
+      genreButtons.innerHTML = '';
+      const genreSet = new Set(questions.map(q => q.g));
+      const genres = Array.from(genreSet);
+      genres.forEach(g => {
+        const btn = document.createElement('button');
+        btn.textContent = g;
+        btn.className = 'genre-btn';
+        btn.onclick = () => startGenreMode(g);
+        genreButtons.appendChild(btn);
+      });
+    }
+
+    function startRandomMode() {
+      quizModeLabel.textContent = 'モード：ランダム';
+      currentGenre = null;
+      order = [...Array(questions.length).keys()];
+      shuffle(order);
+      index = 0;
+      loadQuestion();
+      showScreen('quiz');
+    }
+
+    function startGenreMode(genre) {
+      quizModeLabel.textContent = 'モード：ジャンル別';
+      currentGenre = genre;
+      order = questions
+        .map((q, i) => ({ q, i }))
+        .filter(obj => obj.q.g === genre)
+        .map(obj => obj.i);
+      shuffle(order);
+      index = 0;
+      loadQuestion();
+      showScreen('quiz');
+    }
+
+    function loadQuestion() {
+      const qIndex = order[index];
+      const q = questions[qIndex];
+      genreTag.textContent = q.g;
+      questionEl.textContent = q.q;
+      resultEl.textContent = '';
+      explanationEl.textContent = '';
+      nextBtn.classList.add('hidden');
+      progressEl.textContent = (index + 1) + ' / ' + order.length;
+      updateScore();
+    }
+
+    function answer(choice) {
+      const qIndex = order[index];
+      const q = questions[qIndex];
+      answerCount++;
+      if (choice === q.a) {
+        correctCount++;
+        resultEl.textContent = '◎ 正解！';
+        resultEl.style.color = '#43a047';
+      } else {
+        resultEl.textContent = '× 不正解';
+        resultEl.style.color = '#e53935';
+      }
+      if (q.e) {
+        explanationEl.textContent = '【解説】' + q.e;
+      } else {
+        explanationEl.textContent = '';
+      }
+      updateScore();
+      nextBtn.classList.remove('hidden');
+    }
+
+    function nextQuestion() {
+      index = (index + 1) % order.length;
+      loadQuestion();
+    }
+
+    function updateScore() {
+      if (answerCount === 0) {
+        scoreEl.textContent = '';
+        return;
+      }
+      const rate = Math.round((correctCount / answerCount) * 100);
+      scoreEl.textContent = '正解 ' + correctCount + ' / ' + answerCount + '（正答率 ' + rate + '%）';
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    // 初期表示
+    showScreen('menu');
+  </script>
+</body>
+</html>
