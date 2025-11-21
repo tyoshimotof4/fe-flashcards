@@ -35,7 +35,7 @@
     .subtitle {
       font-size: 13px;
       color: #666;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .btn {
       display: block;
@@ -133,6 +133,11 @@
       text-align: right;
       min-height: 1.2em;
     }
+    .total-score {
+      font-size: 12px;
+      color: #555;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -144,6 +149,7 @@
       <button class="btn btn-primary" onclick="selectMode('random')">ランダム出題（全ジャンル）</button>
       <button class="btn btn-secondary" onclick="selectMode('genre')">ジャンル別に解く</button>
       <p id="loadStatus" class="subtitle"></p>
+      <p id="totalStats" class="total-score"></p>
     </div>
 
     <!-- ジャンル選択画面 -->
@@ -178,6 +184,47 @@
     let questionsLoaded = false;
 
     const loadStatusEl = document.getElementById('loadStatus');
+    const totalStatsEl = document.getElementById('totalStats');
+
+    // 累計スコア用（ローカルストレージ）
+    const LS_KEY = 'feFlashStatsV1';
+    let totalCorrect = 0;
+    let totalAnswered = 0;
+
+    function loadTotalStats() {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const obj = JSON.parse(raw);
+        totalCorrect = obj.totalCorrect || 0;
+        totalAnswered = obj.totalAnswered || 0;
+      } catch (e) {
+        console.warn('スコア読み込みエラー', e);
+      }
+    }
+
+    function saveTotalStats() {
+      try {
+        const obj = { totalCorrect, totalAnswered };
+        localStorage.setItem(LS_KEY, JSON.stringify(obj));
+      } catch (e) {
+        console.warn('スコア保存エラー', e);
+      }
+    }
+
+    function updateTotalStatsView() {
+      if (!totalAnswered) {
+        totalStatsEl.textContent = 'これまでの通算成績：まだ回答していません。';
+        return;
+      }
+      const rate = Math.round((totalCorrect / totalAnswered) * 100);
+      totalStatsEl.textContent =
+        'これまでの通算成績：正解 ' + totalCorrect + ' / ' + totalAnswered + '（正答率 ' + rate + '%）';
+    }
+
+    // 初期に累計スコアを読み込んで表示
+    loadTotalStats();
+    updateTotalStatsView();
 
     fetch('questions.json')
       .then(res => res.json())
@@ -195,8 +242,9 @@
     let currentGenre = null;      // 選択中ジャンル（genreモード時）
     let order = [];               // 出題順インデックス配列
     let index = 0;                // 今の出題位置
-    let correctCount = 0;         // 正解数
-    let answerCount  = 0;         // 回答数
+    let correctCount = 0;         // （今回セッションの）正解数
+    let answerCount  = 0;         // （今回セッションの）回答数
+    let answeredThisQuestion = false; // この問題に既に回答したか
 
     const screenMenu  = document.getElementById('screen-menu');
     const screenGenre = document.getElementById('screen-genre');
@@ -217,9 +265,14 @@
       if (target === 'menu') screenMenu.classList.remove('hidden');
       if (target === 'genre') screenGenre.classList.remove('hidden');
       if (target === 'quiz') screenQuiz.classList.remove('hidden');
+      if (target === 'menu') {
+        // メニューに戻ったとき累計スコアを再表示
+        updateTotalStatsView();
+      }
     }
 
     function resetScore() {
+      // 今回セッションのスコアのみリセット（累計は保持）
       correctCount = 0;
       answerCount  = 0;
       updateScore();
@@ -296,13 +349,22 @@
       resultEl.textContent = '';
       explanationEl.textContent = '';
       nextBtn.classList.add('hidden');
+      answeredThisQuestion = false; // 新しい問題なのでまだ未回答
       progressEl.textContent = (index + 1) + ' / ' + order.length;
       updateScore();
     }
 
     function answer(choice) {
+      // 1問につき1回だけ回答を受け付ける
+      if (answeredThisQuestion) {
+        return; // 2回目以降のタップは無視
+      }
+      answeredThisQuestion = true;
+
       const qIndex = order[index];
       const q = questions[qIndex];
+
+      // セッションスコア
       answerCount++;
       if (choice === q.a) {
         correctCount++;
@@ -312,6 +374,15 @@
         resultEl.textContent = '× 不正解';
         resultEl.style.color = '#e53935';
       }
+
+      // 累計スコア更新
+      totalAnswered++;
+      if (choice === q.a) {
+        totalCorrect++;
+      }
+      saveTotalStats();
+      updateTotalStatsView();
+
       if (q.e) {
         explanationEl.textContent = '【解説】' + q.e;
       } else {
@@ -332,7 +403,7 @@
         return;
       }
       const rate = Math.round((correctCount / answerCount) * 100);
-      scoreEl.textContent = '正解 ' + correctCount + ' / ' + answerCount + '（正答率 ' + rate + '%）';
+      scoreEl.textContent = '今回の成績：正解 ' + correctCount + ' / ' + answerCount + '（正答率 ' + rate + '%）';
     }
 
     function shuffle(array) {
