@@ -150,6 +150,7 @@
       <button class="btn btn-secondary" onclick="selectMode('genre')">ジャンル別に解く</button>
       <p id="loadStatus" class="subtitle"></p>
       <p id="totalStats" class="total-score"></p>
+      <button class="btn btn-small" onclick="clearTotalStats()">通算成績をリセット</button>
     </div>
 
     <!-- ジャンル選択画面 -->
@@ -220,6 +221,21 @@
       const rate = Math.round((totalCorrect / totalAnswered) * 100);
       totalStatsEl.textContent =
         'これまでの通算成績：正解 ' + totalCorrect + ' / ' + totalAnswered + '（正答率 ' + rate + '%）';
+    }
+
+    function clearTotalStats() {
+      if (!confirm('通算成績をリセットしますか？
+（元には戻せません）')) {
+        return;
+      }
+      totalCorrect = 0;
+      totalAnswered = 0;
+      try {
+        localStorage.removeItem(LS_KEY);
+      } catch (e) {
+        console.warn('スコア削除エラー', e);
+      }
+      updateTotalStatsView();
     }
 
     // 初期に累計スコアを読み込んで表示
