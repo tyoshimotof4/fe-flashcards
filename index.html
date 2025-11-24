@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>基本情報 2択フラッシュカード</title>
+  <title>基本情報 / セキュリティ 2択フラッシュカード</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -26,7 +26,7 @@
     }
     h1 {
       font-size: 22px;
-      margin: 0 0 4px;
+      margin: 0 0 8px;
     }
     h2 {
       font-size: 18px;
@@ -35,7 +35,7 @@
     .subtitle {
       font-size: 13px;
       color: #666;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
     }
     .btn {
       display: block;
@@ -73,6 +73,10 @@
       font-size: 14px;
       width: auto;
       display: inline-block;
+    }
+    .btn-danger {
+      background: #ffeb3b;
+      color: #000;
     }
     .tag {
       display: inline-block;
@@ -133,33 +137,61 @@
       text-align: right;
       min-height: 1.2em;
     }
-    .total-score {
-      font-size: 13px;
-      color: #333;
-      margin-top: 4px;
+    .totalscore {
+      font-size: 12px;
+      color: #777;
       margin-bottom: 8px;
-      text-align: left;
+      text-align: right;
       min-height: 1.2em;
+    }
+    .exam-name {
+      font-weight: bold;
+      color: #1565c0;
     }
   </style>
 </head>
 <body>
   <div id="app">
-    <!-- トップメニュー -->
-    <div id="screen-menu" class="card">
-      <h1>基本情報 2択フラッシュカード</h1>
-      <p class="subtitle">片手タップでサクサク解ける学習アプリ（問題データ：questions.json）</p>
+    <!-- ★ 新・試験選択画面 ★ -->
+    <div id="screen-exam" class="card">
+      <h1>試験区分を選択</h1>
+      <p class="subtitle">学習したい試験を選んでください</p>
+      <button class="btn btn-primary" onclick="selectExam('fe')">
+        基本情報技術者試験
+      </button>
+      <button class="btn btn-secondary" onclick="selectExam('sg')">
+        情報セキュリティマネジメント試験
+      </button>
+      <p class="subtitle" style="margin-top:16px;">
+        ・同じ画面デザインで両方の試験を学習できます。<br>
+        ・通算成績は試験ごとに別々に記録されます。
+      </p>
+    </div>
+
+    <!-- 既存：モード選択メニュー -->
+    <div id="screen-menu" class="card hidden">
+      <h1 id="appTitle">2択フラッシュカード</h1>
+      <p class="subtitle">
+        <span class="exam-name" id="examLabel"></span> ／
+        片手タップでサクサク解ける学習アプリ
+      </p>
+      <button class="btn btn-primary" onclick="selectMode('random')">
+        ランダム出題（全ジャンル）
+      </button>
+      <button class="btn btn-secondary" onclick="selectMode('genre')">
+        ジャンル別に解く
+      </button>
       <p id="loadStatus" class="subtitle"></p>
-      <p id="totalStats" class="total-score"></p>
-      <button class="btn btn-primary" onclick="selectMode('random')">ランダム出題（全ジャンル）</button>
-      <button class="btn btn-secondary" onclick="selectMode('genre')">ジャンル別に解く</button>
-      <button class="btn btn-small" onclick="clearTotalStats()">通算成績をリセット</button>
+      <button class="btn btn-small" onclick="backToExam()">← 試験選択に戻る</button>
     </div>
 
     <!-- ジャンル選択画面 -->
     <div id="screen-genre" class="card hidden">
       <h2>ジャンルを選択</h2>
-      <p class="subtitle">解きたい分野をタップしてください</p>
+      <p class="subtitle">
+        <span class="exam-name" id="examLabelGenre"></span> ／
+        解きたい分野をタップしてください
+      </p>
       <div id="genreButtons" class="genre-grid"></div>
       <button class="btn btn-small" onclick="backToMenu()">← メニューへ戻る</button>
     </div>
@@ -170,6 +202,7 @@
         <span id="quizModeLabel"></span>
         <span id="progress"></span>
       </div>
+      <div class="totalscore" id="totalScore"></div>
       <div id="score" class="score"></div>
       <div class="tag" id="genreTag"></div>
       <p class="question-text" id="question"></p>
@@ -178,133 +211,219 @@
       <div id="result" class="result"></div>
       <div id="explanation" class="explanation"></div>
       <button id="nextBtn" class="btn btn-next hidden" onclick="nextQuestion()">次の問題へ ?</button>
-      <button class="btn btn-small" onclick="backToMenu()">← メニュー</button>
+
+      <div style="margin-top:12px;">
+        <button class="btn btn-small" onclick="backToMenu()">← メニュー</button>
+        <button class="btn btn-small btn-danger" onclick="resetCumulativeScore()">
+          通算成績をリセット
+        </button>
+      </div>
     </div>
   </div>
 
   <script>
-    // --- 累計スコア保存用 ---
-    const LS_KEY = 'feFlashStatsV1';
-    let totalCorrect = 0;
-    let totalAnswered = 0;
-
-    function loadTotalStats() {
-      try {
-        const saved = localStorage.getItem(LS_KEY);
-        if (saved) {
-          const obj = JSON.parse(saved);
-          if (typeof obj.correct === 'number' && typeof obj.answered === 'number') {
-            totalCorrect = obj.correct;
-            totalAnswered = obj.answered;
-          }
-        }
-      } catch (e) {
-        console.warn('スコア読み込みエラー', e);
+    // --- 試験区分ごとの情報 ---
+    const examInfo = {
+      fe: {
+        name: '基本情報技術者試験',
+        file: 'fe_questions.json',   // ★基本情報の問題ファイル名
+        storageKey: 'fe_flash_stats_fe'
+      },
+      sg: {
+        name: '情報セキュリティマネジメント試験',
+        file: 'sg_questions.json',   // ★セキュリティマネジメントの問題ファイル名
+        storageKey: 'fe_flash_stats_sg'
       }
-      updateTotalStatsView();
-    }
+    };
 
-    function saveTotalStats() {
-      try {
-        localStorage.setItem(LS_KEY, JSON.stringify({
-          correct: totalCorrect,
-          answered: totalAnswered
-        }));
-      } catch (e) {
-        console.warn('スコア保存エラー', e);
-      }
-    }
-
-    function updateTotalStatsView() {
-      const el = document.getElementById('totalStats');
-      if (!el) return;
-      if (totalAnswered === 0) {
-        el.textContent = 'これまでの通算成績：まだ回答していません。';
-      } else {
-        const rate = Math.round((totalCorrect / totalAnswered) * 100);
-        el.textContent =
-          'これまでの通算成績：正解 ' + totalCorrect +
-          ' / ' + totalAnswered + '（正答率 ' + rate + '%）';
-      }
-    }
-
-    function clearTotalStats() {
-      if (!confirm('通算成績をリセットしますか？\n（元には戻せません）')) {
-        return;
-      }
-      totalCorrect = 0;
-      totalAnswered = 0;
-      try {
-        localStorage.removeItem(LS_KEY);
-      } catch (e) {
-        console.warn('スコア削除エラー', e);
-      }
-      updateTotalStatsView();
-    }
-
-    // --- 問題データ ---
+    let currentExam = null;       // 'fe' or 'sg'
     let questions = [];
     let questionsLoaded = false;
-    let answeredThisQuestion = false; // この問題は既に答えたか
+
+    // 出題モードと状態
+    let mode = null;              // 'random' or 'genre'
+    let currentGenre = null;
+    let order = [];               // 出題順インデックス配列
+    let index = 0;
+    let answeredCurrent = false;  // この問題で既に回答したか
+
+    // セッション成績
+    let sessionCorrect = 0;
+    let sessionAnswer  = 0;
+
+    // 通算成績（試験ごと）
+    let totalCorrect = 0;
+    let totalAnswer  = 0;
+
+    // --- DOM 取得 ---
+    const screenExam   = document.getElementById('screen-exam');
+    const screenMenu   = document.getElementById('screen-menu');
+    const screenGenre  = document.getElementById('screen-genre');
+    const screenQuiz   = document.getElementById('screen-quiz');
+
+    const appTitle     = document.getElementById('appTitle');
+    const examLabel    = document.getElementById('examLabel');
+    const examLabelGenre = document.getElementById('examLabelGenre');
 
     const loadStatusEl = document.getElementById('loadStatus');
-
-    fetch('questions.json')
-      .then(res => res.json())
-      .then(data => {
-        questions = data;
-        questionsLoaded = true;
-        loadStatusEl.textContent = '問題数：' + questions.length + '問 読み込み済み';
-      })
-      .catch(err => {
-        console.error(err);
-        loadStatusEl.textContent =
-          '※ questions.json が読み込めませんでした。HTMLと同じフォルダに置き、簡易Webサーバー経由で開いてください。';
-      });
-
-    let mode = null;              // 'random' or 'genre'
-    let currentGenre = null;      // 選択中ジャンル
-    let order = [];               // 出題順インデックス配列
-    let index = 0;                // 今の出題位置
-    let correctCount = 0;         // このセッションの正解数
-    let answerCount  = 0;         // このセッションの回答数
-
-    const screenMenu  = document.getElementById('screen-menu');
-    const screenGenre = document.getElementById('screen-genre');
-    const screenQuiz  = document.getElementById('screen-quiz');
-    const genreTag    = document.getElementById('genreTag');
-    const questionEl  = document.getElementById('question');
-    const resultEl    = document.getElementById('result');
+    const genreButtons = document.getElementById('genreButtons');
+    const genreTag     = document.getElementById('genreTag');
+    const questionEl   = document.getElementById('question');
+    const resultEl     = document.getElementById('result');
     const explanationEl = document.getElementById('explanation');
-    const nextBtn     = document.getElementById('nextBtn');
-    const quizModeLabel = document.getElementById('quizModeLabel');
-    const progressEl  = document.getElementById('progress');
-    const scoreEl     = document.getElementById('score');
+    const nextBtn      = document.getElementById('nextBtn');
+    const quizModeLabel= document.getElementById('quizModeLabel');
+    const progressEl   = document.getElementById('progress');
+    const scoreEl      = document.getElementById('score');
+    const totalScoreEl = document.getElementById('totalScore');
 
+    // 画面切り替え
     function showScreen(target) {
+      screenExam.classList.add('hidden');
       screenMenu.classList.add('hidden');
       screenGenre.classList.add('hidden');
       screenQuiz.classList.add('hidden');
-      if (target === 'menu') screenMenu.classList.remove('hidden');
+      if (target === 'exam')  screenExam.classList.remove('hidden');
+      if (target === 'menu')  screenMenu.classList.remove('hidden');
       if (target === 'genre') screenGenre.classList.remove('hidden');
-      if (target === 'quiz') screenQuiz.classList.remove('hidden');
+      if (target === 'quiz')  screenQuiz.classList.remove('hidden');
     }
 
-    function resetScore() {
-      correctCount = 0;
-      answerCount  = 0;
-      updateScore();
+    // --- 試験選択 ---
+    function selectExam(examKey) {
+      const info = examInfo[examKey];
+      if (!info) {
+        alert('未対応の試験区分です。');
+        return;
+      }
+      currentExam = examKey;
+      questions = [];
+      questionsLoaded = false;
+      loadStatusEl.textContent = '問題を読み込み中…';
+
+      // タイトルなど更新（先に表示用だけ更新しておく）
+      appTitle.textContent = info.name + ' 2択フラッシュカード';
+      examLabel.textContent = info.name;
+      examLabelGenre.textContent = info.name;
+
+      // セッション成績リセット
+      resetSessionScore();
+
+      // 通算成績読み込み
+      loadCumulativeScore();
+
+      // 問題ファイルを読み込む
+      fetch(info.file)
+        .then(res => res.json())
+        .then(data => {
+          questions = data;
+          questionsLoaded = true;
+          loadStatusEl.textContent = '問題数：' + questions.length + '問 読み込み済み';
+          showScreen('menu');
+        })
+        .catch(err => {
+          console.error(err);
+          questionsLoaded = false;
+          loadStatusEl.textContent =
+            '※ ' + info.file + ' が読み込めませんでした。\n' +
+            'HTMLファイルと同じフォルダに配置し、簡易Webサーバー経由で開いてください。';
+          alert('問題データが読み込めませんでした。ファイル名と配置を確認してください。');
+          showScreen('exam');
+        });
     }
 
-    function backToMenu() {
-      mode = null;
-      currentGenre = null;
-      showScreen('menu');
+    function backToExam() {
+      currentExam = null;
+      questions = [];
+      questionsLoaded = false;
+      loadStatusEl.textContent = '';
+      showScreen('exam');
     }
 
+    // --- 成績管理 ---
+    function resetSessionScore() {
+      sessionCorrect = 0;
+      sessionAnswer  = 0;
+      updateScoreDisplays();
+    }
+
+    function loadCumulativeScore() {
+      if (!currentExam) return;
+      const key = examInfo[currentExam].storageKey;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        try {
+          const obj = JSON.parse(saved);
+          totalCorrect = obj.totalCorrect || 0;
+          totalAnswer  = obj.totalAnswer || 0;
+        } catch (e) {
+          totalCorrect = 0;
+          totalAnswer  = 0;
+        }
+      } else {
+        totalCorrect = 0;
+        totalAnswer  = 0;
+      }
+      updateScoreDisplays();
+    }
+
+    function saveCumulativeScore() {
+      if (!currentExam) return;
+      const key = examInfo[currentExam].storageKey;
+      const obj = {
+        totalCorrect,
+        totalAnswer
+      };
+      localStorage.setItem(key, JSON.stringify(obj));
+    }
+
+    function resetCumulativeScore() {
+      if (!currentExam) {
+        alert('試験区分が選択されていません。');
+        return;
+      }
+      const info = examInfo[currentExam];
+      if (!confirm(info.name + ' の通算成績をリセットします。よろしいですか？')) {
+        return;
+      }
+      totalCorrect = 0;
+      totalAnswer  = 0;
+      saveCumulativeScore();
+      updateScoreDisplays();
+      alert('通算成績をリセットしました。');
+    }
+
+    function updateScoreDisplays() {
+      // 通算成績
+      if (totalAnswer === 0) {
+        totalScoreEl.textContent = '【通算】まだ解答履歴はありません。';
+      } else {
+        const rate = Math.round((totalCorrect / totalAnswer) * 100);
+        totalScoreEl.textContent =
+          '【通算】正解 ' + totalCorrect + ' / ' + totalAnswer +
+          '（正答率 ' + rate + '%）';
+      }
+
+      // セッション成績
+      if (sessionAnswer === 0) {
+        scoreEl.textContent = '';
+      } else {
+        const rate = Math.round((sessionCorrect / sessionAnswer) * 100);
+        scoreEl.textContent =
+          '【今回】正解 ' + sessionCorrect + ' / ' + sessionAnswer +
+          '（正答率 ' + rate + '%）';
+      }
+    }
+
+    // --- モード選択 ---
     function ensureLoaded() {
+      if (!currentExam) {
+        alert('まず試験区分を選択してください。');
+        showScreen('exam');
+        return false;
+      }
       if (!questionsLoaded || questions.length === 0) {
-        alert('問題データがまだ読み込まれていません。\nquestions.json を確認して、数秒後にもう一度お試しください。');
+        alert('問題データがまだ読み込まれていません。\n数秒後にもう一度お試しください。');
         return false;
       }
       return true;
@@ -313,7 +432,7 @@
     function selectMode(m) {
       if (!ensureLoaded()) return;
       mode = m;
-      resetScore();
+      resetSessionScore();
       if (mode === 'random') {
         startRandomMode();
       } else if (mode === 'genre') {
@@ -322,8 +441,15 @@
       }
     }
 
+    function backToMenu() {
+      mode = null;
+      currentGenre = null;
+      resetSessionScore();
+      showScreen('menu');
+    }
+
+    // --- ジャンル選択 ---
     function buildGenreButtons() {
-      const genreButtons = document.getElementById('genreButtons');
       genreButtons.innerHTML = '';
       const genreSet = new Set(questions.map(q => q.g));
       const genres = Array.from(genreSet);
@@ -336,6 +462,7 @@
       });
     }
 
+    // --- 出題 ---
     function startRandomMode() {
       quizModeLabel.textContent = 'モード：ランダム';
       currentGenre = null;
@@ -353,6 +480,10 @@
         .map((q, i) => ({ q, i }))
         .filter(obj => obj.q.g === genre)
         .map(obj => obj.i);
+      if (order.length === 0) {
+        alert('このジャンルの問題が見つかりませんでした。');
+        return;
+      }
       shuffle(order);
       index = 0;
       loadQuestion();
@@ -367,26 +498,26 @@
       resultEl.textContent = '';
       explanationEl.textContent = '';
       nextBtn.classList.add('hidden');
+      answeredCurrent = false;
       progressEl.textContent = (index + 1) + ' / ' + order.length;
-      answeredThisQuestion = false; // 新しい問題なので未回答
-      updateScore();
+      updateScoreDisplays();
     }
 
     function answer(choice) {
-      // 1問につき1回だけ回答を受け付ける
-      if (answeredThisQuestion) {
-        return; // 2回目以降のタップは無視
+      if (answeredCurrent) {
+        // 同じ問題で2回以上はカウントしない
+        return;
       }
-      answeredThisQuestion = true;
+      answeredCurrent = true;
 
       const qIndex = order[index];
       const q = questions[qIndex];
 
-      answerCount++;
-      totalAnswered++;
-
+      // セッション・通算ともにカウント
+      sessionAnswer++;
+      totalAnswer++;
       if (choice === q.a) {
-        correctCount++;
+        sessionCorrect++;
         totalCorrect++;
         resultEl.textContent = '◎ 正解！';
         resultEl.style.color = '#43a047';
@@ -401,24 +532,14 @@
         explanationEl.textContent = '';
       }
 
-      updateScore();
-      updateTotalStatsView();
-      saveTotalStats();
+      saveCumulativeScore();
+      updateScoreDisplays();
       nextBtn.classList.remove('hidden');
     }
 
     function nextQuestion() {
       index = (index + 1) % order.length;
       loadQuestion();
-    }
-
-    function updateScore() {
-      if (answerCount === 0) {
-        scoreEl.textContent = '';
-        return;
-      }
-      const rate = Math.round((correctCount / answerCount) * 100);
-      scoreEl.textContent = '正解 ' + correctCount + ' / ' + answerCount + '（正答率 ' + rate + '%）';
     }
 
     function shuffle(array) {
@@ -429,8 +550,7 @@
     }
 
     // 初期表示
-    loadTotalStats();
-    showScreen('menu');
+    showScreen('exam');
   </script>
 </body>
 </html>
