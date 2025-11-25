@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>基本情報 / セキュリティ 2択フラッシュカード</title>
+  <title>FE / SG / iパス 2択フラッシュカード</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -56,6 +56,14 @@
       background: #eeeeee;
       color: #333;
     }
+    .btn-tertiary {
+      background: #66bb6a;
+      color: #333;
+    }
+    .btn-randomtitl {
+      background: #ffb74d;
+      color: #333;
+    }
     .btn-a {
       background: #43a047;
       color: #fff;
@@ -65,8 +73,8 @@
       color: #fff;
     }
     .btn-next {
-      background: #0288d1;
-      color: #fff;
+      background: #4fc3f7;/*#0288d1*/
+      color: #000;
     }
     .btn-small {
       padding: 10px;
@@ -74,6 +82,7 @@
       width: auto;
       display: inline-block;
     }
+    /* ★ リセットボタン：黄色＋黒文字に変更 */
     .btn-danger {
       background: #ffeb3b;
       color: #000;
@@ -152,7 +161,7 @@
 </head>
 <body>
   <div id="app">
-    <!-- ★ 新・試験選択画面 ★ -->
+    <!-- ★ 試験選択画面 ★ -->
     <div id="screen-exam" class="card">
       <h1>試験区分を選択</h1>
       <p class="subtitle">学習したい試験を選んでください</p>
@@ -162,20 +171,24 @@
       <button class="btn btn-secondary" onclick="selectExam('sg')">
         情報セキュリティマネジメント試験
       </button>
+      <!-- ★ 追加した iパスボタン -->
+      <button class="btn btn-tertiary" onclick="selectExam('ip')">
+        ITパスポート試験
+      </button>
       <p class="subtitle" style="margin-top:16px;">
-        ・同じ画面デザインで両方の試験を学習できます。<br>
+        ・同じ画面デザインで3つの試験を学習できます。<br>
         ・通算成績は試験ごとに別々に記録されます。
       </p>
     </div>
 
-    <!-- 既存：モード選択メニュー -->
+    <!-- モード選択メニュー -->
     <div id="screen-menu" class="card hidden">
       <h1 id="appTitle">2択フラッシュカード</h1>
       <p class="subtitle">
         <span class="exam-name" id="examLabel"></span> ／
         片手タップでサクサク解ける学習アプリ
       </p>
-      <button class="btn btn-primary" onclick="selectMode('random')">
+      <button class="btn btn-randomtitl" onclick="selectMode('random')">
         ランダム出題（全ジャンル）
       </button>
       <button class="btn btn-secondary" onclick="selectMode('genre')">
@@ -210,7 +223,7 @@
       <button class="btn btn-b" onclick="answer('B')">B：誤り</button>
       <div id="result" class="result"></div>
       <div id="explanation" class="explanation"></div>
-      <button id="nextBtn" class="btn btn-next hidden" onclick="nextQuestion()">次の問題へ ?</button>
+      <button id="nextBtn" class="btn btn-next hidden" onclick="nextQuestion()">次の問題へ ＝≫</button>
 
       <div style="margin-top:12px;">
         <button class="btn btn-small" onclick="backToMenu()">← メニュー</button>
@@ -226,17 +239,23 @@
     const examInfo = {
       fe: {
         name: '基本情報技術者試験',
-        file: 'fe_questions.json',   // ★基本情報の問題ファイル名
+        file: 'fe_questions.json',   // 基本情報の問題ファイル名
         storageKey: 'fe_flash_stats_fe'
       },
       sg: {
         name: '情報セキュリティマネジメント試験',
-        file: 'sg_questions.json',   // ★セキュリティマネジメントの問題ファイル名
+        file: 'sg_questions.json',   // セキュリティマネジメントの問題ファイル名
         storageKey: 'fe_flash_stats_sg'
+      },
+      // ★ ITパスポートを追加
+      ip: {
+        name: 'ITパスポート試験',
+        file: 'ip_questions.json',   // ITパスポートの問題ファイル名
+        storageKey: 'fe_flash_stats_ip'
       }
     };
 
-    let currentExam = null;       // 'fe' or 'sg'
+    let currentExam = null;       // 'fe' or 'sg' or 'ip'
     let questions = [];
     let questionsLoaded = false;
 
@@ -301,7 +320,7 @@
       questionsLoaded = false;
       loadStatusEl.textContent = '問題を読み込み中…';
 
-      // タイトルなど更新（先に表示用だけ更新しておく）
+      // タイトルなど更新
       appTitle.textContent = info.name + ' 2択フラッシュカード';
       examLabel.textContent = info.name;
       examLabelGenre.textContent = info.name;
